@@ -1,9 +1,9 @@
 #!/bin/bash
 #
-#  This script is intended and shared as an example of Azure CLI commands used to accomplish a specific use case. 
-#  It is NOT intended to be used in any production environment and no guarantee or SLA is provided or implied by Microsoft or the individual(s) who authored or shared it. 
-#  Use of this script should be limited to proof-of-concept work only within a non-production environment.  
-#  Please consider this script to be an informational example only - use at your own risk. 
+#  This script is intended and shared as an example of Azure CLI commands used to accomplish a specific use case.
+#  It is NOT intended to be used in any production environment and no guarantee or SLA is provided or implied by Microsoft or the individual(s) who authored or shared it.
+#  Use of this script should be limited to proof-of-concept work only within a non-production environment.
+#  Please consider this script to be an informational example only - use at your own risk.
 #
 #
 
@@ -11,7 +11,7 @@
 
 usage() { echo "Usage: $0 [-g <resource-group>] [-n <vmname>]" 1>&2; exit 1; }
 
-##  Receive parameters 
+##  Receive parameters
 while getopts ":g:n:" o; do
     case "${o}" in
         g)
@@ -35,27 +35,26 @@ fi
 TIMESTAMP=`date +"%Y%m%d%H%M%S"`
 
 ##  Query Source VM information
-VM=`az vm show -g $RESGRP -n $VMNAME --query "{Name:name,Location:location,Size:hardwareProfile.vmSize,OSType:storageProfile.osDisk.osType,OSDisk:storageProfile.osDisk.name,DataDisks:storageProfile.dataDisks[].name}"`
+VM=`az vm show -g $RESGRP -n $VMNAME --query "{Name:name,Location:location,Size:hardwareProfile.vmSize,OSType:storageProfile.osDisk.osType,OSDisk:storageProfile.osDisk.name,DataDisks:storageProfile.dataDisks[].name,DataDiskUri:storageProfile.dataDisks[].vhd.uri}"`
 
 ##  Extract relevant data points from JSON
 VMSIZE=`echo $VM | jq -c '.Size' |sed "s/\"//g" `
 LOCATION=`echo $VM | jq -c '.Location' |sed "s/\"//g" `
 OSTYPE=`echo $VM | jq -c '.OSType' |sed "s/\"//g" `
-OSDISK=`echo $VM | jq -c '.OSDisk' |sed "s/\"//g" `
+OSDISK=`echo $VM | jq -c '.OSDisk' | sed "s/\"//g" `
 DATADISKS=`echo $VM | jq -c '.DataDisks[]' |sed "s/\"//g" `
 
 ##  Create OS Disk snapshot
-az snapshot create -g $RESGRP -n ${OSDISK}_${TIMESTAMP} --source $OSDISK  --sku Premium_LRS
+az snapshot create --location $LOCATION -g $RESGRP -n ${OSDISK}_${TIMESTAMP} --source $OSDISK  --sku Premium_LRS
 
 ##  Create Data Disk snapshots
 for DDISK in $DATADISKS
 do
-   az snapshot create -g $RESGRP -n ${DDISK}_${TIMESTAMP} --source $DDISK --sku Premium_LRS
+   az snapshot create --location $LOCATION -g $RESGRP -n ${DDISK}_${TIMESTAMP} --source $DDISK --sku Premium_LRS
 done
 
 ## Add sleep to give snapshots a chance to get started
 sleep 5
-exit
 
 ##  Check status of background snapshot creation
 echo "Waiting while snapshots are taken from source VM disks"
@@ -68,12 +67,12 @@ do
 done
 
 ## Create VHD from OS Disk snapshot
-az disk create -g $RESGRP -n ${OSDISK}_${TIMESTAMP}disk --source ${OSDISK}_${TIMESTAMP} --no-wait
+az disk create --location $LOCATION -g $RESGRP -n ${OSDISK}_${TIMESTAMP}disk --source ${OSDISK}_${TIMESTAMP} --no-wait
 
 ## Create VHDs from DATA Disk snapshots
 for DDISK in $DATADISKS
 do
-    az disk create -g $RESGRP -n ${DDISK}_${TIMESTAMP}disk --source ${DDISK}_${TIMESTAMP} --no-wait
+    az disk create --location $LOCATION -g $RESGRP -n ${DDISK}_${TIMESTAMP}disk --source ${DDISK}_${TIMESTAMP} --no-wait
     ## Build list of data disks for reference later
     VMDDISKLIST="$VMDDISKLIST ${DDISK}_${TIMESTAMP}disk"
 done
